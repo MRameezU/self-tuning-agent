@@ -224,4 +224,4 @@ MIT — see [LICENSE](LICENSE)
 
 ## Author
 
-Built by a lead ML engineer as a demonstration of agentic reasoning applied to real model optimization. The goal was not to build another AutoML tool — it was to build something that thinks out loud.
+Built by a ML engineer as a demonstration of agentic reasoning applied to real model optimization. The goal was not to build another AutoML tool — it was to build something that thinks out loud.
