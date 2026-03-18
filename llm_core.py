@@ -1,3 +1,13 @@
+"""
+llm_core.py
+
+Handles everything LLM-related: building the prompt, calling Ollama,
+validating the response, and handing back a clean ExperimentProposal.
+
+The Pydantic layer is non-negotiable here. The LLM will eventually return
+something malformed — you want a ValidationError with a useful message,
+not a KeyError that blows up halfway through a training run.
+"""
 
 import json
 import logging
@@ -207,6 +217,7 @@ class LLMCore:
         payload = {
             "model":  self.model,
             "stream": False,
+            "keep_alive": 0,  # unload model from VRAM immediately after response
             "options": {"temperature": OLLAMA_TEMPERATURE},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
