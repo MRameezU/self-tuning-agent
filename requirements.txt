@@ -1,0 +1,21 @@
+# torch needs the cu121 index for CUDA 12.1 (RTX 4070 Super)
+# install this line separately first:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+torchvision
+torchaudio
+
+albumentations
+requests
+pydantic
+mlflow
+sqlalchemy
+scikit-learn
+rich
+matplotlib
+jinja2
+python-dotenv
+onnx
+onnxruntime-gpu
+numpy
+Pillow
+tqdm
