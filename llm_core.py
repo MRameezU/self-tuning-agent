@@ -1,5 +1,4 @@
 
-
 import json
 import logging
 import re
@@ -26,17 +25,18 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExperimentProposal:
     """What the LLM produces each iteration — the agent's next move."""
-    rationale:            str         # diagnosis of what happened so far
-    architecture:         str         # e.g. "EfficientNetV2-S, dropout=0.3"
+    rationale:            str        # diagnosis of what happened so far
+    architecture:         str        # e.g. "EfficientNetV2-S, dropout=0.3"
     optimizer:            str
     learning_rate:        float
     batch_size:           int
     epochs:               int
+    scheduler:            str        # CosineAnnealing | StepLR | OneCycleLR
     augmentations:        list[str]
     class_weights:        bool
     freeze_backbone:      bool
     unfreeze_after_epoch: int
-    hypothesis:           str         # what the agent thinks will happen
+    hypothesis:           str        # what the agent thinks will happen
 
 
 class ExperimentProposalSchema(BaseModel):
@@ -48,15 +48,24 @@ class ExperimentProposalSchema(BaseModel):
     """
     rationale:            str
     architecture:         str
-    optimizer:            str         = Field(..., pattern="^(AdamW|SGD)$")
+    optimizer:            str = Field(..., pattern="^(AdamW|SGD)$")
     learning_rate:        float
     batch_size:           int
     epochs:               int
+    scheduler:            str
     augmentations:        list[str]
     class_weights:        bool
     freeze_backbone:      bool
     unfreeze_after_epoch: int
     hypothesis:           str
+
+    @field_validator("scheduler")
+    @classmethod
+    def scheduler_must_be_valid(cls, v: str) -> str:
+        valid = {"CosineAnnealing", "StepLR", "OneCycleLR"}
+        if v not in valid:
+            raise ValueError(f"scheduler must be one of {sorted(valid)}, got '{v}'")
+        return v
 
     @field_validator("learning_rate")
     @classmethod
@@ -115,6 +124,7 @@ you're making these specific changes.
 expected val_f1 and why.
 - batch_size must be 32 or 64.
 - optimizer must be "AdamW" or "SGD".
+- scheduler must be one of: "CosineAnnealing", "StepLR", "OneCycleLR".
 - augmentations must be a subset of: {augmentations}.
 - unfreeze_after_epoch must be one of: 0, 3, 5.
 
@@ -126,6 +136,7 @@ JSON schema:
   "learning_rate":        <float>,
   "batch_size":           <32|64>,
   "epochs":               <int>,
+  "scheduler":            "<CosineAnnealing|StepLR|OneCycleLR>",
   "augmentations":        ["<aug1>", ...],
   "class_weights":        <true|false>,
   "freeze_backbone":      <true|false>,
@@ -155,7 +166,7 @@ class LLMCore:
 
     def __init__(
         self,
-        host: str  = OLLAMA_HOST,
+        host:  str = OLLAMA_HOST,
         model: str = OLLAMA_MODEL,
     ) -> None:
         self.host  = host.rstrip("/")
@@ -260,10 +271,8 @@ class LLMCore:
         Pull the first {...} block out of the response.
         Handles ```json fences, leading text, trailing commentary.
         """
-        # strip markdown fences if present
         text = re.sub(r"```(?:json)?", "", text).strip()
 
-        # find the outermost braces
         start = text.find("{")
         if start == -1:
             return None
@@ -313,10 +322,10 @@ if __name__ == "__main__":
 
     print("Ollama is up. Sending a test prompt...\n")
 
-    # minimal context to simulate what memory.build_context() will produce
     test_context = """
 Run 1:
   Proposal:   AdamW, lr=0.001, batch=32, epochs=10, no class weights, backbone frozen
+  Scheduler:  CosineAnnealing
   Augments:   RandomHorizontalFlip, RandomRotation
   Hypothesis: Expect ~0.78 F1 as a baseline
   Result:     best_val_f1=0.7812, status=done
@@ -333,6 +342,7 @@ Run 1:
         print(f"  lr:           {proposal.learning_rate}")
         print(f"  batch_size:   {proposal.batch_size}")
         print(f"  epochs:       {proposal.epochs}")
+        print(f"  scheduler:    {proposal.scheduler}")
         print(f"  augments:     {proposal.augmentations}")
         print(f"  class_weights:{proposal.class_weights}")
         print(f"  freeze:       {proposal.freeze_backbone}")
