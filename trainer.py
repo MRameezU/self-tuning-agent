@@ -212,7 +212,7 @@ def _build_loaders(data_path: Path, proposal: dict, num_workers: int = 4):
     val_transform   = _build_transforms([], training=False)
 
     train_dataset = XRayDataset(data_path / "train", train_transform)
-    val_dataset   = XRayDataset(data_path / "val",   val_transform)
+    val_dataset   = XRayDataset(data_path / "test",   val_transform)
 
     # class weights for imbalanced dataset — ~3:1 pneumonia to normal
     # inverse frequency weighting: normal class gets 3x the penalty
