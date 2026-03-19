@@ -217,7 +217,7 @@ class LLMCore:
         payload = {
             "model":  self.model,
             "stream": False,
-            "keep_alive": 0,  # unload model from VRAM immediately after response
+            "keep_alive": 600,  # unload model from VRAM immediately after response
             "options": {"temperature": OLLAMA_TEMPERATURE},
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},

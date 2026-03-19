@@ -40,7 +40,7 @@ OLLAMA_TEMPERATURE = 0.3
 
 # 32b at Q4_K_M can be slow on first token. 120s is generous but avoids
 # false timeouts mid-reasoning on a loaded machine.
-OLLAMA_TIMEOUT = 300 # 5 minutes — generous for 8b cold load
+OLLAMA_TIMEOUT = 600 # 5 minutes — generous for 8b cold load
 
 # ── Training defaults ─────────────────────────────────────────────────────────
 
