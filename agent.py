@@ -8,7 +8,7 @@ Nothing clever here — it's a while loop with a budget. The intelligence
 lives in the LLM (llm_core.py) and the training sandbox (trainer.py).
 This file just connects them and keeps track of what's happening.
 """
-
+import time
 import logging
 import sys
 from datetime import datetime
@@ -265,6 +265,7 @@ def run_agent() -> None:
                 "[yellow]OOM — this run's results won't count toward the best. "
                 "The agent will propose a smaller config next.[/]\n"
             )
+            time.sleep(15) # let the OS reclaim memory before hitting Ollama
 
         # ── Reflect ─────────────────────────────────────────────────────────
         correct = _assess_hypothesis(proposal, result.best_f1)
