@@ -29,7 +29,7 @@ CONTEXT_WINDOW = 8
 # runtime, avoiding the version downgrade warning thrown when a hardcoded
 # opset is lower than the exporter's default. Falls back to 18 if the
 # attribute isn't present (torch < 2.x).
-ONNX_OPSET = int(torch.onnx.producer_version.split(".")[0]) if hasattr(torch.onnx, "producer_version") else 18
+ONNX_OPSET = 18
 # ── Ollama ────────────────────────────────────────────────────────────────────
 
 OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "http://localhost:11434")
