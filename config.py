@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import torch
 
 load_dotenv()
 
@@ -24,6 +25,11 @@ MAX_RUNS = int(os.getenv("MAX_RUNS", 12))
 # 8 is enough — any more and you're just padding the prompt
 CONTEXT_WINDOW = 8
 
+# Dynamically resolves the ONNX opset version torch actually supports at
+# runtime, avoiding the version downgrade warning thrown when a hardcoded
+# opset is lower than the exporter's default. Falls back to 18 if the
+# attribute isn't present (torch < 2.x).
+ONNX_OPSET = int(torch.onnx.producer_version.split(".")[0]) if hasattr(torch.onnx, "producer_version") else 18
 # ── Ollama ────────────────────────────────────────────────────────────────────
 
 OLLAMA_HOST  = os.getenv("OLLAMA_HOST", "http://localhost:11434")

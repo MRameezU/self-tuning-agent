@@ -29,7 +29,7 @@ from rich.rule import Rule
 from rich.table import Table
 from rich import box
 
-from config import GOAL_F1, MAX_RUNS, MODEL_NAME, DATASET_NAME, OUTPUTS_DIR
+from config import GOAL_F1, MAX_RUNS, MODEL_NAME, DATASET_NAME, OUTPUTS_DIR,ONNX_OPSET
 from llm_core import ExperimentProposal, LLMCore
 from memory import Memory
 from trainer import TrainingRunner
@@ -181,7 +181,7 @@ def _export_best_model(run_id: str) -> None:
             input_names=["image"],
             output_names=["logits"],
             dynamic_axes={"image": {0: "batch"}, "logits": {0: "batch"}},
-            opset_version=17,
+            opset_version=ONNX_OPSET,
         )
         console.print(f"[dim]ONNX model exported → {onnx_path}[/]")
 
