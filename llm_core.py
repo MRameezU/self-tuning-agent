@@ -84,18 +84,33 @@ class ExperimentProposalSchema(BaseModel):
             raise ValueError(f"learning_rate must be positive, got {v}")
         return v
 
+    # @field_validator("batch_size")
+    # @classmethod
+    # def batch_size_sane(cls, v: int) -> int:
+    #     if v not in (32, 64):
+    #         raise ValueError(f"batch_size must be 32 or 64 for this GPU, got {v}")
+    #     return v
+
     @field_validator("batch_size")
     @classmethod
     def batch_size_sane(cls, v: int) -> int:
-        if v not in (32, 64):
-            raise ValueError(f"batch_size must be 32 or 64 for this GPU, got {v}")
+        if v != 32:
+            raise ValueError(f"batch_size must be 32 (64 causes OOM on this GPU), got {v}")
         return v
+
+    # @field_validator("epochs")
+    # @classmethod
+    # def epochs_in_range(cls, v: int) -> int:
+    #     if not (1 <= v <= 30):
+    #         raise ValueError(f"epochs out of expected range [1, 30], got {v}")
+    #     return v
 
     @field_validator("epochs")
     @classmethod
     def epochs_in_range(cls, v: int) -> int:
-        if not (1 <= v <= 30):
-            raise ValueError(f"epochs out of expected range [1, 30], got {v}")
+        valid = {10, 15, 20}
+        if v not in valid:
+            raise ValueError(f"epochs must be one of {sorted(valid)}, got {v}")
         return v
 
     @field_validator("augmentations")
@@ -132,7 +147,9 @@ Rules:
 you're making these specific changes.
 - "hypothesis" should state what you predict will happen — be specific about the \
 expected val_f1 and why.
-- batch_size must be 32 or 64.
+- batch_size must be 32. Do NOT use 64 — it causes out-of-memory errors on this GPU.
+- epochs must be exactly one of: 10, 15, 20. No other value is accepted.
+- "hypothesis" is REQUIRED. You must always include it. A response missing "hypothesis" will be rejected.
 - optimizer must be "AdamW" or "SGD".
 - scheduler must be one of: "CosineAnnealing", "StepLR", "OneCycleLR".
 - augmentations must be a subset of: {augmentations}.
@@ -144,8 +161,8 @@ JSON schema:
   "architecture":         "<string — e.g. EfficientNetV2-S, dropout=0.3>",
   "optimizer":            "<AdamW|SGD>",
   "learning_rate":        <float>,
-  "batch_size":           <32|64>,
-  "epochs":               <int>,
+  "batch_size":           32,
+  "epochs":               <10|15|20>,
   "scheduler":            "<CosineAnnealing|StepLR|OneCycleLR>",
   "augmentations":        ["<aug1>", ...],
   "class_weights":        <true|false>,
