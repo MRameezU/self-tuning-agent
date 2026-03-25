@@ -398,10 +398,12 @@ def run_training(proposal_dict: dict, run_id: str) -> None:
                     param.requires_grad = True
                 # rebuild optimizer to include newly unfrozen params
                 optimizer = _build_optimizer(model, proposal_dict)
-                if not is_onecycle:
-                    scheduler = _build_scheduler(
-                        optimizer, proposal_dict, len(train_loader)
-                    )
+                # always rebuild scheduler — OneCycleLR must reference the current optimizer
+                scheduler = _build_scheduler(optimizer, proposal_dict, len(train_loader))
+                # if not is_onecycle:
+                #     scheduler = _build_scheduler(
+                #         optimizer, proposal_dict, len(train_loader)
+                #     )
 
             train_loss           = _train_epoch(
                 model, train_loader, criterion, optimizer, scheduler, device, is_onecycle
