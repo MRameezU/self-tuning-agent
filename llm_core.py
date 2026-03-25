@@ -299,6 +299,7 @@ class LLMCore:
         Pull the first {...} block out of the response.
         Handles ```json fences, leading text, trailing commentary.
         """
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
         text = re.sub(r"```(?:json)?", "", text).strip()
 
         start = text.find("{")
