@@ -2,7 +2,6 @@
 import time
 import logging
 import sys
-from datetime import datetime
 from pathlib import Path
 
 from rich.console import Console
@@ -24,6 +23,8 @@ from config import GOAL_F1, MAX_RUNS, MODEL_NAME, DATASET_NAME, OUTPUTS_DIR, ONN
 from llm_core import ExperimentProposal, LLMCore
 from memory import Memory
 from trainer import TrainingRunner
+from visualizer import LivePlot
+from report import ReportGenerator
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -192,16 +193,19 @@ def run_agent() -> None:
     llm    = LLMCore()
     memory = Memory()
     runner = TrainingRunner()
+    plot   = LivePlot()          # starts background thread immediately;
+                                 # gracefully no-ops if no display available
 
     # check Ollama is up before we commit to anything
     console.print("[dim]Checking Ollama...[/]", end=" ")
     if not llm.ping():
-        console.print(f"[red]✗[/]")
+        console.print("[red]✗[/]")
         console.print(
             f"[red]Ollama not reachable or model not loaded.[/]\n"
             f"Run:  ollama pull {llm.model}\n"
             f"Then: ollama serve"
         )
+        plot.close()   # clean shutdown even on early exit
         sys.exit(1)
     console.print("[green]✓[/]\n")
 
@@ -226,6 +230,8 @@ def run_agent() -> None:
         _print_proposal(proposal)
 
         # ── Execute ─────────────────────────────────────────────────────────
+        plot.new_run(iteration)   # signal the live window a new run is starting
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[cyan]Training {task.description}[/]"),
@@ -241,6 +247,7 @@ def run_agent() -> None:
                 total=proposal.epochs,
             )
             for epoch_metrics in runner.execute(proposal):
+                plot.update(epoch_metrics)   # feed each epoch to the live window
                 progress.update(
                     task,
                     advance=1,
@@ -278,12 +285,24 @@ def run_agent() -> None:
             break
 
     # ── Wrap up ───────────────────────────────────────────────────────────────
+
+    # shut the plot thread down before anything else — this is what eliminates
+    # the tkinter "main thread is not in main loop" RuntimeErrors on exit
+    plot.close()
+
     if not goal_achieved:
         _print_budget_exhausted(memory.best_f1())
 
     if best_run_id:
         console.print("[dim]Exporting best model to ONNX...[/]")
         _export_best_model(best_run_id)
+
+    console.print("[dim]Generating HTML report...[/]")
+    try:
+        path = ReportGenerator().generate()
+        console.print(f"[dim]Report → {path}[/]")
+    except Exception as e:
+        logger.warning("Report generation failed (non-fatal): %s", e)
 
     console.print(
         f"\n[dim]Runs logged to experiments.db  ·  "
