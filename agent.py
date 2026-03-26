@@ -1,4 +1,13 @@
+"""
+agent.py
 
+Entry point. Runs the agent loop:
+    reason → execute → observe → reflect → repeat
+
+Nothing clever here — it's a while loop with a budget. The intelligence
+lives in the LLM (llm_core.py) and the training sandbox (trainer.py).
+This file just connects them and keeps track of what's happening.
+"""
 import time
 import logging
 import sys
@@ -141,7 +150,6 @@ def _assess_hypothesis(proposal: ExperimentProposal, best_f1: float) -> bool:
     if numbers:
         predicted = float(numbers[0])
         return abs(best_f1 - predicted) <= 0.03
-    # no specific prediction number found — directional check only
     return best_f1 > 0.0
 
 
@@ -167,7 +175,7 @@ def _export_best_model(run_id: str) -> None:
         model.load_state_dict(torch.load(ckpt_path, map_location="cpu"))
         model.eval()
 
-        dummy = torch.randn(1, 3, 300, 300)
+        dummy     = torch.randn(1, 3, 300, 300)
         onnx_path = OUTPUTS_DIR / "best_model.onnx"
 
         torch.onnx.export(
@@ -242,10 +250,7 @@ def run_agent() -> None:
             console=console,
             transient=False,
         ) as progress:
-            task = progress.add_task(
-                MODEL_NAME,
-                total=proposal.epochs,
-            )
+            task = progress.add_task(MODEL_NAME, total=proposal.epochs)
             for epoch_metrics in runner.execute(proposal):
                 plot.update(epoch_metrics)   # feed each epoch to the live window
                 progress.update(
@@ -286,9 +291,12 @@ def run_agent() -> None:
 
     # ── Wrap up ───────────────────────────────────────────────────────────────
 
-    # shut the plot thread down before anything else — this is what eliminates
-    # the tkinter "main thread is not in main loop" RuntimeErrors on exit
-    plot.close()
+    # save the live plot to disk while the figure is still alive, then close
+    # the thread — this ordering matters: close() destroys the figure
+    live_plot_path = OUTPUTS_DIR / "training_curves.png"
+    console.print(f"[dim]Saving live plot → {live_plot_path}[/]")
+    plot.save(live_plot_path)
+    plot.close()   # clean shutdown — eliminates tkinter RuntimeErrors on exit
 
     if not goal_achieved:
         _print_budget_exhausted(memory.best_f1())
