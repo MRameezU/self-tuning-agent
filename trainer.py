@@ -1,6 +1,5 @@
 
 import json
-import os
 import sys
 import uuid
 import logging
@@ -279,19 +278,38 @@ def _build_model(proposal: dict, device):
     return model.to(device)
 
 
-def _build_optimizer(model, proposal: dict):
+def _build_optimizer(model, proposal: dict, backbone_unfrozen: bool = False):
+    """
+    Build the optimizer with differential learning rates when the backbone
+    is unfrozen.
+
+    When backbone_unfrozen=True the backbone gets lr/10. This prevents the
+    catastrophic val loss spike that occurs when ~20M newly-unfrozen parameters
+    are updated at the full head learning rate — observed empirically as a
+    val_loss jump from ~0.27 to ~1.30 in a single epoch.
+
+    When the backbone is still frozen, only classifier params have
+    requires_grad=True, so a flat LR is fine.
+    """
     import torch.optim as optim
 
-    # only optimise params that require grad — respects frozen backbone
-    params = [p for p in model.parameters() if p.requires_grad]
-
-    name = proposal["optimizer"]
     lr   = proposal["learning_rate"]
+    name = proposal["optimizer"]
+
+    if backbone_unfrozen:
+        # differential LR — backbone gets 10x lower rate than the head
+        param_groups = [
+            {"params": model.features.parameters(),   "lr": lr / 10},
+            {"params": model.classifier.parameters(), "lr": lr},
+        ]
+    else:
+        # backbone is frozen — only optimise params that require grad
+        param_groups = [p for p in model.parameters() if p.requires_grad]
 
     if name == "AdamW":
-        return optim.AdamW(params, lr=lr, weight_decay=1e-4)
+        return optim.AdamW(param_groups, weight_decay=1e-4)
     elif name == "SGD":
-        return optim.SGD(params, lr=lr, momentum=0.9, weight_decay=1e-4, nesterov=True)
+        return optim.SGD(param_groups, momentum=0.9, weight_decay=1e-4, nesterov=True)
     else:
         raise ValueError(f"Unknown optimizer: {name}")
 
@@ -379,31 +397,40 @@ def run_training(proposal_dict: dict, run_id: str) -> None:
     try:
         train_loader, val_loader = _build_loaders(DATA_PATH, proposal_dict)
         model     = _build_model(proposal_dict, device)
-        optimizer = _build_optimizer(model, proposal_dict)
+        optimizer = _build_optimizer(model, proposal_dict, backbone_unfrozen=False)
         scheduler = _build_scheduler(optimizer, proposal_dict, len(train_loader))
         criterion = nn.CrossEntropyLoss()
 
-        epochs       = proposal_dict["epochs"]
-        unfreeze_at  = proposal_dict["unfreeze_after_epoch"]
-        is_onecycle  = proposal_dict["scheduler"] == "OneCycleLR"
-        best_f1      = 0.0
-        best_ckpt    = OUTPUTS_DIR / f"{run_id}_best.pt"
+        epochs          = proposal_dict["epochs"]
+        unfreeze_at     = proposal_dict["unfreeze_after_epoch"]
+        is_onecycle     = proposal_dict["scheduler"] == "OneCycleLR"
+        backbone_frozen = proposal_dict["freeze_backbone"]
+        best_f1         = 0.0
+        best_ckpt       = OUTPUTS_DIR / f"{run_id}_best.pt"
 
         for epoch in range(1, epochs + 1):
 
-            # progressive unfreezing — let the backbone settle into the new
-            # head for a few epochs before opening the whole network to gradients
-            if unfreeze_at > 0 and epoch == unfreeze_at:
+            # progressive unfreezing — rebuild optimizer with differential LR
+            # so the backbone gets lr/10 instead of the full head rate.
+            # this prevents the val_loss spike caused by updating ~20M freshly
+            # unfrozen params at the same rate as the small classifier head.
+            if backbone_frozen and unfreeze_at > 0 and epoch == unfreeze_at:
                 for param in model.features.parameters():
                     param.requires_grad = True
-                # rebuild optimizer to include newly unfrozen params
-                optimizer = _build_optimizer(model, proposal_dict)
-                # always rebuild scheduler — OneCycleLR must reference the current optimizer
-                scheduler = _build_scheduler(optimizer, proposal_dict, len(train_loader))
-                # if not is_onecycle:
-                #     scheduler = _build_scheduler(
-                #         optimizer, proposal_dict, len(train_loader)
-                #     )
+                backbone_frozen = False
+                optimizer = _build_optimizer(
+                    model, proposal_dict, backbone_unfrozen=True
+                )
+                scheduler = _build_scheduler(
+                    optimizer, proposal_dict, len(train_loader)
+                )
+                logger.info(
+                    "Epoch %d: backbone unfrozen with differential LR "
+                    "(backbone=%.2e, head=%.2e)",
+                    epoch,
+                    proposal_dict["learning_rate"] / 10,
+                    proposal_dict["learning_rate"],
+                )
 
             train_loss           = _train_epoch(
                 model, train_loader, criterion, optimizer, scheduler, device, is_onecycle
