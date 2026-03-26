@@ -1,13 +1,4 @@
-"""
-agent.py
 
-Entry point. Runs the agent loop:
-    reason → execute → observe → reflect → repeat
-
-Nothing clever here — it's a while loop with a budget. The intelligence
-lives in the LLM (llm_core.py) and the training sandbox (trainer.py).
-This file just connects them and keeps track of what's happening.
-"""
 import time
 import logging
 import sys
@@ -29,7 +20,7 @@ from rich.rule import Rule
 from rich.table import Table
 from rich import box
 
-from config import GOAL_F1, MAX_RUNS, MODEL_NAME, DATASET_NAME, OUTPUTS_DIR,ONNX_OPSET
+from config import GOAL_F1, MAX_RUNS, MODEL_NAME, DATASET_NAME, OUTPUTS_DIR, ONNX_OPSET
 from llm_core import ExperimentProposal, LLMCore
 from memory import Memory
 from trainer import TrainingRunner
@@ -133,19 +124,23 @@ def _print_budget_exhausted(best_f1: float) -> None:
 
 def _assess_hypothesis(proposal: ExperimentProposal, best_f1: float) -> bool:
     """
-    Crude but effective: extract the predicted F1 from the hypothesis string
-    and check if actual F1 landed within 0.03 of it. If no number is found,
-    fall back to checking directional improvement.
+    Check whether the agent's hypothesis was accurate by extracting the
+    predicted F1 and comparing it to the actual result (tolerance ±0.03).
 
-    This verdict gets written to SQLite and fed back into the next prompt
-    so the LLM can calibrate its own confidence over time.
+    Requires 3+ decimal places (e.g. 0.875, 0.910) to match a genuine numeric
+    prediction. This prevents false matches against bare goal references like
+    "closer to 0.9" or "at least 0.90" where the LLM is citing the target,
+    not making a specific prediction.
+
+    Falls back to a directional check (any improvement) when the hypothesis
+    contains no specific numeric prediction.
     """
     import re
-    numbers = re.findall(r"0\.\d+", proposal.hypothesis)
+    numbers = re.findall(r"0\.\d{3,}", proposal.hypothesis)
     if numbers:
         predicted = float(numbers[0])
         return abs(best_f1 - predicted) <= 0.03
-    # no specific number — just check it said "improve" and it did
+    # no specific prediction number found — directional check only
     return best_f1 > 0.0
 
 
@@ -265,7 +260,7 @@ def run_agent() -> None:
                 "[yellow]OOM — this run's results won't count toward the best. "
                 "The agent will propose a smaller config next.[/]\n"
             )
-            time.sleep(15) # let the OS reclaim memory before hitting Ollama
+            time.sleep(15)  # let the OS reclaim memory before hitting Ollama
 
         # ── Reflect ─────────────────────────────────────────────────────────
         correct = _assess_hypothesis(proposal, result.best_f1)
